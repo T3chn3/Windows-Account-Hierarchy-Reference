@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Windows Account Hierarchy — Threat Hunter Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1117;
+    --surface2: #161a23;
+    --surface3: #1c2130;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.15);
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3af;
+
+    --purple: #a78bfa;
+    --purple-bg: rgba(167,139,250,0.08);
+    --purple-border: rgba(167,139,250,0.25);
+
+    --teal: #2dd4bf;
+    --teal-bg: rgba(45,212,191,0.08);
+    --teal-border: rgba(45,212,191,0.25);
+
+    --blue: #60a5fa;
+    --blue-bg: rgba(96,165,250,0.08);
+    --blue-border: rgba(96,165,250,0.25);
+
+    --amber: #fbbf24;
+    --amber-bg: rgba(251,191,36,0.08);
+    --amber-border: rgba(251,191,36,0.25);
+
+    --red: #f87171;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* GRID NOISE BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(96,165,250,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(96,165,250,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    padding: 28px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    background: rgba(10,12,16,0.9);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--blue);
+    background: var(--blue-bg);
+    border: 1px solid var(--blue-border);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 4px;
+    white-space: nowrap;
+  }
+  .header-text h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .header-text p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    gap: 20px;
+    padding: 12px 40px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    background: var(--surface);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+  }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* LAYOUT */
+  .main { display: flex; flex: 1; }
+
+  /* HIERARCHY PANEL */
+  .hierarchy-panel {
+    width: 380px;
+    min-width: 340px;
+    border-right: 1px solid var(--border);
+    padding: 24px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .section-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    padding: 14px 8px 6px;
+    text-transform: uppercase;
+  }
+
+  /* ACCOUNT NODE */
+  .account-node {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .account-node:hover { border-color: var(--border-hover); background: var(--surface2); }
+  .account-node.active { border-color: var(--node-color, var(--blue-border)) !important; background: var(--surface2); }
+  .account-node.active .node-accent { opacity: 1; }
+
+  .node-accent {
+    width: 3px;
+    border-radius: 8px 0 0 8px;
+    background: var(--node-color, var(--blue));
+    opacity: 0.35;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+
+  .node-body {
+    padding: 10px 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .node-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .node-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .node-sid {
+    font-size: 10px;
+    color: var(--node-color, var(--blue));
+    margin-top: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0.85;
+  }
+
+  .node-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 10px 0 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    transition: color 0.15s, transform 0.15s;
+  }
+  .account-node:hover .node-arrow, .account-node.active .node-arrow {
+    color: var(--text);
+    transform: translateX(2px);
+  }
+
+  /* connector lines */
+  .connector {
+    display: flex;
+    align-items: center;
+    padding: 2px 0 2px 22px;
+    gap: 8px;
+  }
+  .connector-line {
+    width: 18px;
+    height: 1px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .connector-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  /* DETAIL PANEL */
+  .detail-panel {
+    flex: 1;
+    padding: 32px 40px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .detail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 16px;
+    color: var(--text-muted);
+  }
+  .detail-empty .icon { font-size: 40px; opacity: 0.3; }
+  .detail-empty p { font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+
+  /* DETAIL CONTENT */
+  .detail-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    border: 1px solid;
+  }
+  .detail-header-text { flex: 1; min-width: 0; }
+  .detail-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    word-break: break-all;
+  }
+  .detail-category {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+  }
+  .detail-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    line-height: 1.65;
+  }
+
+  /* SID block */
+  .sid-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .sid-block-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .sid-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .sid-breakdown {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .sid-part {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+  }
+  .sid-part-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .sid-part-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* privilege chips */
+  .priv-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .priv-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--surface2);
+  }
+  .priv-chip.high { border-color: rgba(248,113,113,0.3); color: var(--red); background: rgba(248,113,113,0.06); }
+  .priv-chip.med  { border-color: var(--amber-border); color: var(--amber); background: var(--amber-bg); }
+
+  /* info cards grid */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .info-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .info-card-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .info-card-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* hunt signals */
+  .hunt-list { display: flex; flex-direction: column; gap: 8px; }
+  .hunt-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 14px;
+    background: rgba(248,113,113,0.04);
+    border: 1px solid rgba(248,113,113,0.12);
+    border-radius: 8px;
+  }
+  .hunt-bullet {
+    color: var(--red);
+    font-size: 12px;
+    margin-top: 1px;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .hunt-text { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+
+  /* KQL block */
+  .kql-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .kql-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface3);
+  }
+  .kql-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--teal);
+    text-transform: uppercase;
+  }
+  .kql-copy {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+  .kql-copy:hover { color: var(--text); }
+  .kql-body {
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .kql-kw  { color: #60a5fa; }
+  .kql-op  { color: #a78bfa; }
+  .kql-str { color: #34d399; }
+  .kql-cm  { color: #4b5563; }
+  .kql-fn  { color: #fbbf24; }
+
+  /* attack table */
+  .attack-table { width: 100%; border-collapse: collapse; }
+  .attack-table th {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .attack-table td {
+    font-size: 12px;
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    vertical-align: top;
+  }
+  .attack-table tr:last-child td { border-bottom: none; }
+  .attack-table td:first-child { color: var(--text); }
+  .tid {
+    display: inline-block;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    color: var(--purple);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+
+  /* section headings in detail */
+  .section-heading {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .detail-content { animation: fadeIn 0.2s ease; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+
+  @media (max-width: 700px) {
+    .main { flex-direction: column; }
+    .hierarchy-panel { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); }
+    .detail-panel { padding: 20px 16px; }
+    header { padding: 16px; flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-badge">THREAT HUNTER REF</div>
+    <div class="header-text">
+      <h1>Windows Account Hierarchy</h1>
+      <p>NT AUTHORITY → Guest · Built-in, AD, Enterprise, Service &amp; Restricted</p>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Built-in / OS kernel</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2dd4bf"></div>Active Directory</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div>User-created / enterprise</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>Restricted / limited</div>
+  </div>
+
+  <div class="main">
+    <nav class="hierarchy-panel" id="hierarchy"></nav>
+    <section class="detail-panel" id="detail">
+      <div class="detail-empty">
+        <div class="icon">⬡</div>
+        <p>Select an account to view full breakdown</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const ACCOUNTS = [
+  {
+    id: "system",
+    name: "NT AUTHORITY\\SYSTEM",
+    alias: "LocalSystem",
+    sid: "S-1-5-18",
+    category: "Built-in / OS Kernel",
+    color: "#a78bfa",
+    icon: "⬡",
+    tier: 0,
+    section: "KERNEL TIER",
+    desc: "The highest-privilege identity on any Windows host. Not a user account — a security principal built into the OS kernel with no password, no conventional user profile, and no interactive logon capability by default. Owns kernel objects, the SAM database, and all system services.",
+    sid_parts: [
+      { val: "S", label: "Marker" },
+      { val: "1", label: "Revision" },
+      { val: "5", label: "NT Authority" },
+      { val: "18", label: "LocalSystem (RID)" }
+    ],
+    info: [
+      { label: "Network Identity", val: "DOMAIN\\HOSTNAME$ (machine account)" },
+      { label: "Interactive Logon", val: "Not permitted by default" },
+      { label: "Password", val: "None" },
+      { label: "Profile", val: "%windir%\\system32\\config\\systemprofile" },
+      { label: "Unique per host", val: "No — SID is identical on all Windows installs" },
+      { label: "Can be deleted", val: "No" },
+    ],
+    privileges: [
+      { name: "SeTcbPrivilege", level: "high" },
+      { name: "SeDebugPrivilege", level: "high" },
+      { name: "SeLoadDriverPrivilege", level: "high" },
+      { name: "SeBackupPrivilege", level: "med" },
+      { name: "SeRestorePrivilege", level: "med" },
+      { name: "SeTakeOwnershipPrivilege", level: "med" },
+      { name: "SeChangeNotifyPrivilege", level: "" },
+      { name: "SeCreateTokenPrivilege", level: "high" },
+    ],
+    hunt: [
+      "Interactive logon (Event 4624 logon type 2) — never expected for SYSTEM",
+      "cmd.exe / powershell.exe parented by anything other than services.exe, svchost.exe, or msiexec.exe running as S-1-5-18",
+      "FileCreated events with InitiatingProcessAccountSid == S-1-5-18 outside C:\\Windows and C:\\ProgramData\\Microsoft",
+      "Outbound network auth from HOSTNAME$ to unusual targets — SYSTEM has no network cred, uses machine account",
+      "LSASS memory reads initiated from non-standard SYSTEM processes (T1003.001)"
+    ],
+    kql: `<span class="kql-cm">// MDE — anomalous SYSTEM shell spawn</span>
+<span class="kql-kw">DeviceProcessEvents</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> AccountSid <span class="kql-op">==</span> <span class="kql-str">"S-1-5-18"</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> FileName <span class="kql-fn">in~</span> (<span class="kql-str">"cmd.exe"</span>, <span class="kql-str">"powershell.exe"</span>, <span class="kql-str">"mshta.exe"</span>, <span class="kql-str">"wscript.exe"</span>)
+<span class="kql-op">|</span> <span class="kql-fn">where</span> <span class="kql-fn">not</span>(InitiatingProcessFileName <span class="kql-fn">in~</span> (
+    <span class="kql-str">"services.exe"</span>, <span class="kql-str">"svchost.exe"</span>, <span class="kql-str">"msiexec.exe"</span>))
+<span class="kql-op">|</span> <span class="kql-fn">project</span> Timestamp, DeviceName, FileName,
+    ProcessCommandLine, InitiatingProcessFileName`,
+    attacks: [
+      { name: "Token Impersonation", tid: "T1134", desc: "Escalate admin → SYSTEM via token duplication" },
+      { name: "Create/Modify Service", tid: "T1543.003", desc: "Register service running as SYSTEM for persistence" },
+      { name: "LSASS Credential Dump", tid: "T1003.001", desc: "Requires SYSTEM or SeDebugPrivilege" },
+      { name: "Named Pipe Impersonation", tid: "T1134.001", desc: "SYSTEM pipes abused for privilege escalation" },
+    ]
+  },
+  {
+    id: "network_service",
+    name: "NT AUTHORITY\\NETWORK SERVICE",
+    alias: "NetworkService",
+    sid: "S-1-5-20",
+    category: "Built-in / OS",
+    color: "#a78bfa",
+    icon: "⬡",
+    tier: 0,
+    section: null,
+    desc: "A reduced-privilege built-in account used by services that need to authenticate over the network. Has fewer local privileges than SYSTEM but presents the machine account credential (HOSTNAME$) for outbound network authentication.",
+    sid_parts: [
+      { val: "S", label: "Marker" },
+      { val: "1", label: "Revision" },
+      { val: "5", label: "NT Authority" },
+      { val: "20", label: "NetworkService (RID)" }
+    ],
+    info: [
+      { label: "Network Identity", val: "DOMAIN\\HOSTNAME$ (machine account)" },
+      { label: "Local Privilege", val: "Reduced — no SeTcbPrivilege" },
+      { label: "Interactive Logon", val: "Not permitted" },
+      { label: "Password", val: "None" },
+      { label: "Unique per host", val: "No — same SID everywhere" },
+    ],
+    privileges: [
+      { name: "SeChangeNotifyPrivilege", level: "" },
+      { name: "SeCreateGlobalPrivilege", level: "" },
+      { name: "SeImpersonatePrivilege", level: "med" },
+    ],
+    hunt: [
+      "Services running as NETWORK SERVICE executing unexpected child processes",
+      "SeImpersonatePrivilege abuse — used in PrintSpoofer / Rogue Potato escalation paths",
+      "Outbound connections from services using this account to non-standard hosts"
+    ],
+    kql: `<span class="kql-cm">// Services running as NETWORK SERVICE spawning shells</span>
+<span class="kql-kw">DeviceProcessEvents</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> AccountSid <span class="kql-op">==</span> <span class="kql-str">"S-1-5-20"</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> FileName <span class="kql-fn">in~</span> (<span class="kql-str">"cmd.exe"</span>, <span class="kql-str">"powershell.exe"</span>, <span class="kql-str">"sh.exe"</span>)
+<span class="kql-op">|</span> <span class="kql-fn">project</span> Timestamp, DeviceName, FileName,
+    ProcessCommandLine, InitiatingProcessFileName`,
+    attacks: [
+      { name: "Potato Attacks", tid: "T1134.002", desc: "SeImpersonatePrivilege → SYSTEM via COM/NTLM relay" },
+      { name: "Service Hijacking", tid: "T1574.010", desc: "Replace service binary running as NetworkService" },
+    ]
+  },
+  {
+    id: "local_service",
+    name: "NT AUTHORITY\\LOCAL SERVICE",
+    alias: "LocalService",
+    sid: "S-1-5-19",
+    category: "Built-in / OS",
+    color: "#a78bfa",
+    icon: "⬡",
+    tier: 0,
+    section: null,
+    desc: "Minimal-privilege built-in account for services that do not require network authentication. Has no network credential — outbound network connections appear as anonymous or null session. Used for services like SSDP Discovery.",
+    sid_parts: [
+      { val: "S", label: "Marker" },
+      { val: "1", label: "Revision" },
+      { val: "5", label: "NT Authority" },
+      { val: "19", label: "LocalService (RID)" }
+    ],
+    info: [
+      { label: "Network Identity", val: "Anonymous / null session" },
+      { label: "Local Privilege", val: "Minimal" },
+      { label: "Interactive Logon", val: "Not permitted" },
+      { label: "Password", val: "None" },
+    ],
+    privileges: [
+      { name: "SeChangeNotifyPrivilege", level: "" },
+      { name: "SeCreateGlobalPrivilege", level: "" },
+    ],
+    hunt: [
+      "Unexpected child process creation from services using LOCAL SERVICE",
+      "Network connections from LOCAL SERVICE context — should be near zero by design"
+    ],
+    kql: `<span class="kql-cm">// LOCAL SERVICE anomalous process spawn</span>
+<span class="kql-kw">DeviceProcessEvents</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> AccountSid <span class="kql-op">==</span> <span class="kql-str">"S-1-5-19"</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> FileName <span class="kql-fn">in~</span> (<span class="kql-str">"cmd.exe"</span>, <span class="kql-str">"powershell.exe"</span>)
+<span class="kql-op">|</span> <span class="kql-fn">project</span> Timestamp, DeviceName, FileName, ProcessCommandLine`,
+    attacks: [
+      { name: "Service Binary Replacement", tid: "T1574.010", desc: "Replace binary of LOCAL SERVICE service" },
+    ]
+  },
+
+  // AD
+  {
+    id: "domain_admins",
+    name: "Domain Admins",
+    alias: "DA — SID: domain-512",
+    sid: "S-1-5-21-<domain>-512",
+    category: "Active Directory Group",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: "ACTIVE DIRECTORY MANAGEMENT",
+    desc: "The most powerful Active Directory group. Members have full control over the domain, can perform DCSync attacks to pull NTLM hashes and Kerberos keys, modify any AD object, and log on to any domain-joined machine. Tier 0 equivalent in Microsoft's tiered administration model.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "512", label: "Domain Admins RID" }
+    ],
+    info: [
+      { label: "Scope", val: "Domain-wide" },
+      { label: "DCSync Rights", val: "Yes (DS-Replication-Get-Changes-All)" },
+      { label: "Default members", val: "Administrator" },
+      { label: "GPO control", val: "Full" },
+      { label: "Logon to DCs", val: "Yes (interactive)" },
+    ],
+    privileges: [
+      { name: "Full domain control", level: "high" },
+      { name: "DCSync (DS-Repl-Get-Changes-All)", level: "high" },
+      { name: "Modify GPO", level: "high" },
+      { name: "Reset any password", level: "high" },
+    ],
+    hunt: [
+      "DA account with interactive logon (type 2) on any non-DC host — Event 4624",
+      "DA logon to workstation or member server — immediate escalation",
+      "DCSync activity: Event 4662 on DC with ObjectType containing 1131f70-...-replication GUIDs from non-DC host",
+      "New member added to Domain Admins: Event 4728",
+      "DA account used for email, web browsing, or scripting outside of dedicated PAW"
+    ],
+    kql: `<span class="kql-cm">// New member added to Domain Admins (Security Event Log)</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4728</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-512"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName,
+    MemberName, TargetUserName`,
+    attacks: [
+      { name: "DCSync", tid: "T1003.006", desc: "Replicate credentials from DC as Domain Admin" },
+      { name: "Pass-the-Hash", tid: "T1550.002", desc: "Lateral movement using DA NTLM hash" },
+      { name: "Golden Ticket", tid: "T1558.001", desc: "Forge Kerberos TGT after KRBTGT compromise" },
+      { name: "AdminSDHolder Abuse", tid: "T1078.002", desc: "Persist via DA-controlled SDHolder ACL" },
+    ]
+  },
+  {
+    id: "enterprise_admins",
+    name: "Enterprise Admins",
+    alias: "EA — SID: RootDomain-519",
+    sid: "S-1-5-21-<root>-519",
+    category: "Active Directory Group",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: null,
+    desc: "Forest-wide administrative group residing in the root domain. Required for operations that affect the entire forest: adding/removing domains, configuring forest trusts, and some cross-domain GPO operations. Should be empty when not in use.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<root>", label: "Root domain identifier" },
+      { val: "519", label: "Enterprise Admins RID" }
+    ],
+    info: [
+      { label: "Scope", val: "Forest-wide" },
+      { label: "Home domain", val: "Forest root domain only" },
+      { label: "Default members", val: "Administrator (root domain)" },
+      { label: "Should be empty", val: "Yes — when not actively in use" },
+    ],
+    privileges: [
+      { name: "Forest-wide GPO", level: "high" },
+      { name: "Domain add/remove", level: "high" },
+      { name: "Trust configuration", level: "high" },
+    ],
+    hunt: [
+      "Any interactive logon by EA member — should be near-zero",
+      "EA group membership change: Event 4728 with TargetSid ending -519",
+      "EA used from non-PAW workstation",
+      "Any EA account activity outside of documented change window"
+    ],
+    kql: `<span class="kql-cm">// Enterprise Admins membership change</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">in</span> (<span class="kql-str">4728</span>, <span class="kql-str">4729</span>)
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-519"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer,
+    SubjectUserName, MemberName, EventID`,
+    attacks: [
+      { name: "Forest Trust Abuse", tid: "T1482", desc: "Leverage EA rights to enumerate/abuse forest trusts" },
+      { name: "SID History Injection", tid: "T1134.005", desc: "EA can inject SID history across domains" },
+    ]
+  },
+  {
+    id: "schema_admins",
+    name: "Schema Admins",
+    alias: "SID: domain-518",
+    sid: "S-1-5-21-<domain>-518",
+    category: "Active Directory Group",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: null,
+    desc: "Controls modification of the AD schema — the blueprint defining all object types and attributes in the forest. Schema changes are permanent and forest-wide. Should be empty at all times outside of documented schema extension events.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "518", label: "Schema Admins RID" }
+    ],
+    info: [
+      { label: "Scope", val: "Forest-wide (schema partition)" },
+      { label: "Changes reversible", val: "No — schema is append-only" },
+      { label: "Should be empty", val: "Yes — outside schema extension projects" },
+    ],
+    privileges: [
+      { name: "Modify AD schema", level: "high" },
+      { name: "Add new object classes", level: "high" },
+    ],
+    hunt: [
+      "Any membership in Schema Admins group — should be empty by baseline",
+      "Schema modification events in AD: Event 5137 on DC with classSchema or attributeSchema objects"
+    ],
+    kql: `<span class="kql-cm">// Schema Admins membership — should always be empty</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">in</span> (<span class="kql-str">4728</span>, <span class="kql-str">4729</span>)
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-518"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName, MemberName`,
+    attacks: [
+      { name: "Schema Backdoor", tid: "T1098", desc: "Add backdoor attributes to AD schema for persistence" },
+    ]
+  },
+  {
+    id: "account_operators",
+    name: "Account Operators",
+    alias: "SID: domain-548",
+    sid: "S-1-5-21-<domain>-548",
+    category: "Active Directory Group",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: null,
+    desc: "Can create and modify most user accounts and groups in AD, excluding Domain Admins, Enterprise Admins, and domain controllers. Often over-trusted in legacy environments and used as a lateral movement stepping stone.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "548", label: "Account Operators RID" }
+    ],
+    info: [
+      { label: "Scope", val: "Domain-wide (non-admin objects)" },
+      { label: "Can modify DA/EA", val: "No — protected by AdminSDHolder" },
+      { label: "Can logon to DCs", val: "Yes (interactive) — by default" },
+    ],
+    privileges: [
+      { name: "Create/modify users", level: "med" },
+      { name: "Create/modify groups", level: "med" },
+      { name: "Local DC logon", level: "med" },
+    ],
+    hunt: [
+      "Account Operators member creating new accounts outside provisioning windows",
+      "Account Operators member resetting passwords of high-value accounts",
+      "Interactive DC logon from Account Operators member"
+    ],
+    kql: `<span class="kql-cm">// Password resets by Account Operators members</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4723</span> <span class="kql-op">or</span> EventID <span class="kql-op">==</span> <span class="kql-str">4724</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName,
+    TargetUserName, EventID`,
+    attacks: [
+      { name: "Account Manipulation", tid: "T1098", desc: "Create rogue accounts or add to privileged groups" },
+      { name: "Forced Auth / NTLM Relay", tid: "T1187", desc: "Reset password, redirect auth for NTLM capture" },
+    ]
+  },
+  {
+    id: "backup_operators",
+    name: "Backup Operators",
+    alias: "SID: S-1-5-32-551",
+    sid: "S-1-5-32-551",
+    category: "Built-in AD Group",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: null,
+    desc: "Grants SeBackupPrivilege and SeRestorePrivilege — the ability to read any file regardless of DACL, and write to any file. Can also log on to domain controllers interactively. Frequently overlooked but carries near-DA potential for credential theft.",
+    sid_parts: [
+      { val: "S-1-5-32", label: "Built-in domain" },
+      { val: "551", label: "Backup Operators RID" }
+    ],
+    info: [
+      { label: "Key privilege", val: "SeBackupPrivilege — read any file" },
+      { label: "Can read NTDS.DIT", val: "Yes — via ntdsutil or Volume Shadow Copy" },
+      { label: "DC interactive logon", val: "Yes by default" },
+    ],
+    privileges: [
+      { name: "SeBackupPrivilege", level: "high" },
+      { name: "SeRestorePrivilege", level: "high" },
+      { name: "SeShutdownPrivilege", level: "" },
+    ],
+    hunt: [
+      "Backup Operators member accessing NTDS.DIT or SYSTEM hive via VSS or ntdsutil",
+      "Backup Operators member with interactive logon to a DC",
+      "wbadmin.exe or diskshadow.exe launched by Backup Operators account"
+    ],
+    kql: `<span class="kql-cm">// Backup Operators — VSS / NTDS access on DC</span>
+<span class="kql-kw">DeviceProcessEvents</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> FileName <span class="kql-fn">in~</span> (<span class="kql-str">"diskshadow.exe"</span>, <span class="kql-str">"wbadmin.exe"</span>, <span class="kql-str">"ntdsutil.exe"</span>)
+<span class="kql-op">|</span> <span class="kql-fn">project</span> Timestamp, DeviceName, AccountName,
+    FileName, ProcessCommandLine`,
+    attacks: [
+      { name: "NTDS Credential Theft", tid: "T1003.003", desc: "SeBackupPrivilege → VSS copy of NTDS.DIT" },
+      { name: "OS Credential Dumping", tid: "T1003", desc: "Read SYSTEM hive for SYSTEM key to decrypt NTDS" },
+    ]
+  },
+  {
+    id: "krbtgt",
+    name: "KRBTGT",
+    alias: "Built-in AD Service Account",
+    sid: "S-1-5-21-<domain>-502",
+    category: "Active Directory Service Account",
+    color: "#2dd4bf",
+    icon: "◈",
+    tier: 1,
+    section: null,
+    desc: "The Kerberos Key Distribution Center service account. Signs all Kerberos TGTs (Ticket Granting Tickets) using its NTLM hash. Disabled and never used interactively. Compromise of this account's hash enables Golden Ticket attacks — unlimited, forged, near-permanent privileged access. Always double-rotate after domain compromise.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "502", label: "KRBTGT RID (fixed)" }
+    ],
+    info: [
+      { label: "Interactive logon", val: "Disabled — never" },
+      { label: "Password changes", val: "Should be done 2× after compromise" },
+      { label: "Controls", val: "All Kerberos TGT issuance in domain" },
+      { label: "NTLM hash use", val: "Signs TGTs — exposure = Golden Ticket" },
+    ],
+    privileges: [
+      { name: "Signs all Kerberos TGTs", level: "high" },
+    ],
+    hunt: [
+      "Any interactive logon attempt by KRBTGT — should be impossible",
+      "Password change on KRBTGT outside documented rotation: Event 4723/4724",
+      "TGT tickets with unusually long lifetimes (>10h) — Golden Ticket indicator",
+      "Kerberos tickets with SID history containing DA/EA SIDs from unusual source"
+    ],
+    kql: `<span class="kql-cm">// KRBTGT password change — should only happen in controlled rotation</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">in</span> (<span class="kql-str">4723</span>, <span class="kql-str">4724</span>)
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetUserName <span class="kql-op">==</span> <span class="kql-str">"krbtgt"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName,
+    TargetUserName, EventID`,
+    attacks: [
+      { name: "Golden Ticket", tid: "T1558.001", desc: "Forge TGT using KRBTGT NTLM hash — bypasses all auth" },
+      { name: "DCSync", tid: "T1003.006", desc: "Pull KRBTGT hash via replication rights" },
+    ]
+  },
+
+  // LOCAL ADMIN
+  {
+    id: "builtin_admin",
+    name: "Administrator",
+    alias: "Built-in local Administrator",
+    sid: "S-1-5-21-<machine>-500",
+    category: "Built-in Local Account",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 2,
+    section: "LOCAL ADMINISTRATOR",
+    desc: "The original local administrator account. Has full control over the local machine. Cannot be deleted. Disabled by default on modern Windows. A primary target for pass-the-hash attacks when the same password is reused across multiple hosts — the core problem LAPS was designed to solve.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID base" },
+      { val: "<machine>", label: "Machine-unique identifier" },
+      { val: "500", label: "Built-in Admin RID (fixed)" }
+    ],
+    info: [
+      { label: "Can be deleted", val: "No" },
+      { label: "Default state", val: "Disabled (modern Windows)" },
+      { label: "RID", val: "500 — fixed, same on every machine" },
+      { label: "LAPS managed", val: "Yes, if LAPS deployed" },
+    ],
+    privileges: [
+      { name: "Full local control", level: "high" },
+      { name: "SeDebugPrivilege", level: "high" },
+      { name: "SeTakeOwnershipPrivilege", level: "med" },
+    ],
+    hunt: [
+      "RID-500 account enabled on domain-joined host — STIG/CIS finding",
+      "Same NTLM hash for local admin across multiple hosts — lateral movement vector",
+      "Pass-the-hash using RID-500 credential: Event 4624 logon type 3, NtlmAuthPackage",
+      "Local admin account used for interactive logon (type 2) on server — unexpected"
+    ],
+    kql: `<span class="kql-cm">// RID-500 interactive logon on domain-joined hosts</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4624</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetUserSid <span class="kql-op">endswith</span> <span class="kql-str">"-500"</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> LogonType <span class="kql-op">in</span> (<span class="kql-str">2</span>, <span class="kql-str">10</span>)
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, TargetUserName,
+    LogonType, IpAddress`,
+    attacks: [
+      { name: "Pass-the-Hash", tid: "T1550.002", desc: "Reuse RID-500 NTLM hash for lateral movement" },
+      { name: "Valid Accounts", tid: "T1078.003", desc: "Enable disabled local admin for persistence" },
+    ]
+  },
+  {
+    id: "laps",
+    name: "LAPS Managed Account",
+    alias: "Local admin — randomized password",
+    sid: "S-1-5-21-<machine>-500",
+    category: "Enterprise Managed",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 2,
+    section: null,
+    desc: "Microsoft Local Administrator Password Solution (LAPS) manages the built-in local Administrator account with a unique, randomized password per machine stored in Active Directory. Eliminates pass-the-hash lateral movement via shared local admin credentials. Windows LAPS (2023+) supersedes legacy LAPS.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID base" },
+      { val: "<machine>", label: "Machine identifier" },
+      { val: "500", label: "Built-in Admin RID" }
+    ],
+    info: [
+      { label: "Password stored in", val: "AD attribute: ms-Mcs-AdmPwd (legacy) / msLAPS-Password (Windows LAPS)" },
+      { label: "Rotation frequency", val: "Configurable — typically 30 days" },
+      { label: "Who can read", val: "Domain Admins + delegated groups" },
+      { label: "Interactive logon", val: "Yes — local only" },
+    ],
+    privileges: [
+      { name: "Full local control", level: "high" },
+    ],
+    hunt: [
+      "LAPS password read from AD by non-admin account: Event 4662 with ms-Mcs-AdmPwd attribute",
+      "LAPS password read in bulk across many machines — recon for lateral movement",
+      "LAPS not deployed — any domain-joined host without ms-Mcs-AdmPwdExpirationTime attribute"
+    ],
+    kql: `<span class="kql-cm">// LAPS password attribute read from AD</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4662</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> Properties <span class="kql-op">contains</span> <span class="kql-str">"ms-Mcs-AdmPwd"</span>
+    <span class="kql-op">or</span> Properties <span class="kql-op">contains</span> <span class="kql-str">"msLAPS-Password"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer,
+    SubjectUserName, ObjectName`,
+    attacks: [
+      { name: "LAPS Credential Access", tid: "T1555", desc: "Read LAPS passwords from AD if delegation misconfigured" },
+    ]
+  },
+
+  // DOMAIN USER
+  {
+    id: "domain_user",
+    name: "Standard Domain User",
+    alias: "Enterprise-created account",
+    sid: "S-1-5-21-<domain>-1000+",
+    category: "Domain User Account",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 3,
+    section: "DOMAIN USER",
+    desc: "Standard enterprise user account created in Active Directory. Authenticates via Kerberos (preferred) or NTLM fallback. Subject to Group Policy, password policies, and logon restrictions. SIDs are assigned sequentially starting at RID 1000.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "1000+", label: "User RID (sequential)" }
+    ],
+    info: [
+      { label: "Auth protocols", val: "Kerberos (primary), NTLM (fallback)" },
+      { label: "GPO subject", val: "Yes" },
+      { label: "Default group", val: "Domain Users (SID: domain-513)" },
+      { label: "SID reuse after delete", val: "No — SIDs are never reused in AD" },
+    ],
+    privileges: [
+      { name: "Log on locally (workstations)", level: "" },
+      { name: "Access This Computer From Network", level: "" },
+    ],
+    hunt: [
+      "Domain user with SPN set (Kerberoastable) — hash extractable without admin rights",
+      "User account with no pre-auth required (AS-REP Roastable) — Event 4768 with etype 0x17",
+      "Standard user logging on to sensitive server directly — unusual path",
+      "Excessive failed logon attempts: Event 4771 (Kerberos) or 4776 (NTLM)"
+    ],
+    kql: `<span class="kql-cm">// AS-REP Roastable accounts — no pre-auth required</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4768</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TicketEncryptionType <span class="kql-op">==</span> <span class="kql-str">"0x17"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer,
+    TargetUserName, IpAddress, TicketEncryptionType`,
+    attacks: [
+      { name: "Kerberoasting", tid: "T1558.003", desc: "Request service tickets for SPN accounts, crack offline" },
+      { name: "AS-REP Roasting", tid: "T1558.004", desc: "Request AS-REP for accounts without pre-auth" },
+      { name: "Password Spraying", tid: "T1110.003", desc: "Test one password across many domain accounts" },
+    ]
+  },
+  {
+    id: "rdp_users",
+    name: "Remote Desktop Users",
+    alias: "SID: S-1-5-32-555",
+    sid: "S-1-5-32-555",
+    category: "Built-in Local Group",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 3,
+    section: null,
+    desc: "Grants the right to log on via Remote Desktop (RDP) without being a local administrator. Members cannot fully administer the system but can access the desktop remotely. A common lateral movement pivot — attacker compromises a domain account, adds it to RDP Users, moves laterally.",
+    sid_parts: [
+      { val: "S-1-5-32", label: "Built-in domain" },
+      { val: "555", label: "Remote Desktop Users RID" }
+    ],
+    info: [
+      { label: "Privilege granted", val: "RDP logon right (SeRemoteInteractiveLogonRight)" },
+      { label: "Local admin", val: "No" },
+      { label: "Network logon", val: "Yes — via RDP" },
+    ],
+    privileges: [
+      { name: "SeRemoteInteractiveLogonRight", level: "med" },
+    ],
+    hunt: [
+      "New member added to Remote Desktop Users group on server: Event 4732",
+      "RDP logon (logon type 10) from unusual source IP or off-hours time",
+      "Non-admin user RDP into sensitive server — lateral movement pattern"
+    ],
+    kql: `<span class="kql-cm">// RDP logon — logon type 10</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4624</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> LogonType <span class="kql-op">==</span> <span class="kql-str">10</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, TargetUserName,
+    IpAddress, WorkstationName`,
+    attacks: [
+      { name: "Remote Desktop Protocol", tid: "T1021.001", desc: "Lateral movement via RDP with valid or stolen creds" },
+    ]
+  },
+
+  // SERVICE ACCOUNTS
+  {
+    id: "gmsa",
+    name: "gMSA / sMSA",
+    alias: "Group / Standalone Managed Service Account",
+    sid: "S-1-5-21-<domain>-<RID>",
+    category: "Managed Service Account",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 4,
+    section: "SERVICE & MANAGED ACCOUNTS",
+    desc: "Group Managed Service Accounts (gMSA) and Standalone MSAs (sMSA) are AD account types with automatically rotating passwords managed by the KDC. No interactive logon. Password never known by a human. Preferred for service accounts — eliminates Kerberoasting risk when properly configured.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "<RID>", label: "Account RID" }
+    ],
+    info: [
+      { label: "Password rotation", val: "Automatic — every 30 days (default)" },
+      { label: "Interactive logon", val: "Not permitted" },
+      { label: "Kerberoastable", val: "Resistant — 240-character random password" },
+      { label: "Who can retrieve", val: "Configured host computer accounts only" },
+    ],
+    privileges: [
+      { name: "Depends on service configuration", level: "" },
+    ],
+    hunt: [
+      "gMSA account with SPN set to unrecognized service — misconfiguration or abuse",
+      "gMSA password retrieved by non-authorized host (Event 4769 from unexpected host)",
+      "gMSA account added to privileged group outside provisioning"
+    ],
+    kql: `<span class="kql-cm">// gMSA Kerberos service ticket requests</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4769</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> ServiceName <span class="kql-op">endswith</span> <span class="kql-str">"$"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer,
+    TargetUserName, ServiceName, ClientIpAddress`,
+    attacks: [
+      { name: "Kerberoasting gMSA", tid: "T1558.003", desc: "Rare — requires SPN + RC4 downgrade; password is 240-char random" },
+    ]
+  },
+  {
+    id: "legacy_svc",
+    name: "Legacy Service Account",
+    alias: "Static-password domain account used as service",
+    sid: "S-1-5-21-<domain>-<RID>",
+    category: "Domain User Account (Service)",
+    color: "#60a5fa",
+    icon: "○",
+    tier: 4,
+    section: null,
+    desc: "A standard domain user account configured to run a service with a manually-set static password. Common in pre-2012 environments and still widespread. If an SPN is registered, it is Kerberoastable — any domain user can request the service ticket and crack it offline. Frequently over-privileged.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Domain base" },
+      { val: "<domain>", label: "Domain identifier" },
+      { val: "<RID>", label: "Account RID" }
+    ],
+    info: [
+      { label: "Password rotation", val: "Manual — often years between changes" },
+      { label: "Kerberoastable", val: "Yes, if SPN registered" },
+      { label: "Interactive logon", val: "Often permitted — misconfiguration" },
+      { label: "Privilege level", val: "Varies — often over-privileged" },
+    ],
+    privileges: [
+      { name: "SeServiceLogonRight", level: "" },
+      { name: "Often over-provisioned", level: "med" },
+    ],
+    hunt: [
+      "Kerberoastable service accounts: SPN set + account enabled + password >1 year old",
+      "Service account used for interactive logon (logon type 2 or 10)",
+      "Service account accessing resources outside its expected scope"
+    ],
+    kql: `<span class="kql-cm">// Kerberos service tickets — potential Kerberoasting</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4769</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TicketEncryptionType <span class="kql-op">==</span> <span class="kql-str">"0x17"</span> <span class="kql-cm">// RC4 — crackable</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> ServiceName <span class="kql-op">!endswith</span> <span class="kql-str">"$"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, TargetUserName,
+    ServiceName, ClientIpAddress`,
+    attacks: [
+      { name: "Kerberoasting", tid: "T1558.003", desc: "Request RC4 TGS, crack static service account password offline" },
+      { name: "Valid Accounts", tid: "T1078.002", desc: "Use compromised service account for persistent access" },
+    ]
+  },
+  {
+    id: "virtual_svc",
+    name: "NT SERVICE\\<ServiceName>",
+    alias: "Virtual service account",
+    sid: "S-1-5-80-<hash>",
+    category: "Built-in / OS",
+    color: "#a78bfa",
+    icon: "⬡",
+    tier: 4,
+    section: null,
+    desc: "Auto-generated per-service virtual accounts introduced in Windows Server 2008 R2. Exist only in the local security context — no AD object, no domain presence. Authenticate to the network using the machine account (HOSTNAME$). Replaced hardcoded LocalSystem usage for many Windows services.",
+    sid_parts: [
+      { val: "S-1-5-80", label: "Virtual service accounts" },
+      { val: "<hash>", label: "Hash of service name" }
+    ],
+    info: [
+      { label: "AD object", val: "None" },
+      { label: "Network auth", val: "DOMAIN\\HOSTNAME$ (machine account)" },
+      { label: "Password", val: "None — managed by OS" },
+      { label: "Interactive logon", val: "Not permitted" },
+      { label: "Example", val: "NT SERVICE\\MSSQLSERVER" },
+    ],
+    privileges: [
+      { name: "Limited local privilege", level: "" },
+    ],
+    hunt: [
+      "Virtual service account launching unexpected child processes",
+      "Service executable replaced for DLL hijacking under virtual account context"
+    ],
+    kql: `<span class="kql-cm">// Virtual service account process events</span>
+<span class="kql-kw">DeviceProcessEvents</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> AccountDomain <span class="kql-op">==</span> <span class="kql-str">"NT SERVICE"</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> FileName <span class="kql-fn">in~</span> (<span class="kql-str">"cmd.exe"</span>, <span class="kql-str">"powershell.exe"</span>)
+<span class="kql-op">|</span> <span class="kql-fn">project</span> Timestamp, DeviceName, AccountName,
+    FileName, ProcessCommandLine`,
+    attacks: [
+      { name: "DLL Search Order Hijacking", tid: "T1574.001", desc: "Drop malicious DLL in service's search path" },
+    ]
+  },
+
+  // RESTRICTED
+  {
+    id: "local_user",
+    name: "Built-in local user (non-admin)",
+    alias: "First local non-admin account",
+    sid: "S-1-5-21-<machine>-1001",
+    category: "Local Account",
+    color: "#fbbf24",
+    icon: "△",
+    tier: 5,
+    section: "RESTRICTED & SPECIAL ACCOUNTS",
+    desc: "Standard local user accounts created during setup or by administrators. No elevated privilege. Cannot read other users' files or make system-wide changes. On domain-joined machines these are rarely used — most users authenticate with domain accounts.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID" },
+      { val: "<machine>", label: "Machine identifier" },
+      { val: "1001", label: "First non-admin local user RID" }
+    ],
+    info: [
+      { label: "Privilege", val: "Standard user — no elevation" },
+      { label: "Group", val: "Users (S-1-5-32-545)" },
+      { label: "Common on", val: "Standalone / workgroup machines" },
+    ],
+    privileges: [
+      { name: "Standard desktop rights only", level: "" },
+    ],
+    hunt: [
+      "Local account used on domain-joined machine for interactive logon — shadow admin risk",
+      "Local account with same password as domain account — credential overlap"
+    ],
+    kql: `<span class="kql-cm">// Local account interactive logon on domain-joined host</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4624</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> LogonType <span class="kql-op">==</span> <span class="kql-str">2</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetDomainName <span class="kql-op">==</span> Computer <span class="kql-cm">// local auth</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, TargetUserName, IpAddress`,
+    attacks: [
+      { name: "Valid Local Accounts", tid: "T1078.003", desc: "Use local account credentials for access" },
+    ]
+  },
+  {
+    id: "default_account",
+    name: "DefaultAccount",
+    alias: "SID: S-1-5-21-<machine>-503",
+    sid: "S-1-5-21-<machine>-503",
+    category: "Built-in Local Account",
+    color: "#fbbf24",
+    icon: "△",
+    tier: 5,
+    section: null,
+    desc: "Introduced in Windows 10 for Shared PC mode. A user-neutral account managed by the system to run processes that don't require a specific user context. Disabled by default except when Shared PC mode is enabled.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID" },
+      { val: "<machine>", label: "Machine identifier" },
+      { val: "503", label: "DefaultAccount RID (fixed)" }
+    ],
+    info: [
+      { label: "Default state", val: "Disabled" },
+      { label: "Used by", val: "Shared PC / kiosk mode" },
+      { label: "Interactive logon", val: "Not permitted normally" },
+    ],
+    privileges: [{ name: "Minimal", level: "" }],
+    hunt: [
+      "DefaultAccount enabled on non-kiosk enterprise machines — unexpected configuration"
+    ],
+    kql: `<span class="kql-cm">// DefaultAccount enabled unexpectedly</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4722</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-503"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName, TargetUserName`,
+    attacks: []
+  },
+  {
+    id: "wdag",
+    name: "WDAGUtilityAccount",
+    alias: "SID: S-1-5-21-<machine>-504",
+    sid: "S-1-5-21-<machine>-504",
+    category: "Built-in Local Account",
+    color: "#fbbf24",
+    icon: "△",
+    tier: 5,
+    section: null,
+    desc: "Windows Defender Application Guard sandbox account. Used internally to manage WDAG browser isolation sessions. Disabled unless WDAG is actively configured. Should never be modified or enabled manually.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID" },
+      { val: "<machine>", label: "Machine identifier" },
+      { val: "504", label: "WDAGUtilityAccount RID (fixed)" }
+    ],
+    info: [
+      { label: "Default state", val: "Disabled" },
+      { label: "Enabled when", val: "WDAG feature is configured" },
+      { label: "Interactive logon", val: "Not permitted" },
+    ],
+    privileges: [{ name: "Sandbox-constrained", level: "" }],
+    hunt: [
+      "WDAGUtilityAccount enabled on hosts without WDAG feature deployed",
+      "Process spawned under WDAGUtilityAccount context outside WDAG container"
+    ],
+    kql: `<span class="kql-cm">// WDAGUtilityAccount unexpected activation</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4722</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-504"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName, TargetUserName`,
+    attacks: []
+  },
+  {
+    id: "guest",
+    name: "Guest",
+    alias: "Built-in Guest account",
+    sid: "S-1-5-21-<machine>-501",
+    category: "Built-in Local Account",
+    color: "#fbbf24",
+    icon: "△",
+    tier: 6,
+    section: null,
+    desc: "The lowest-privilege named built-in account. No password by default. Cannot install software, change settings, or access other users' data. Disabled by default and must remain disabled per CIS Benchmark L1 and DISA STIG. Enabling it represents an immediate finding in any enterprise audit.",
+    sid_parts: [
+      { val: "S-1-5-21", label: "Machine SID" },
+      { val: "<machine>", label: "Machine identifier" },
+      { val: "501", label: "Guest RID (fixed)" }
+    ],
+    info: [
+      { label: "Default state", val: "Disabled" },
+      { label: "Password", val: "None by default" },
+      { label: "CIS / DISA STIG", val: "Must be disabled — automatic finding if enabled" },
+      { label: "Can be deleted", val: "No" },
+    ],
+    privileges: [{ name: "Minimal read-only access", level: "" }],
+    hunt: [
+      "Guest account enabled: Event 4722 with TargetSid ending -501 — automatic high finding",
+      "Any authentication using the Guest account",
+      "Guest account added to any group"
+    ],
+    kql: `<span class="kql-cm">// Guest account enabled — automatic finding</span>
+<span class="kql-kw">SecurityEvent</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> EventID <span class="kql-op">==</span> <span class="kql-str">4722</span>
+<span class="kql-op">|</span> <span class="kql-fn">where</span> TargetSid <span class="kql-op">endswith</span> <span class="kql-str">"-501"</span>
+<span class="kql-op">|</span> <span class="kql-fn">project</span> TimeGenerated, Computer, SubjectUserName, TargetUserName`,
+    attacks: [
+      { name: "Guest Account Abuse", tid: "T1078.003", desc: "Use Guest account as initial foothold — no password required" },
+    ]
+  }
+];
+
+let activeId = null;
+
+function colorFor(acct) {
+  return acct.color;
+}
+
+function buildHierarchy() {
+  const panel = document.getElementById('hierarchy');
+  let currentSection = null;
+
+  ACCOUNTS.forEach(acct => {
+    if (acct.section && acct.section !== currentSection) {
+      currentSection = acct.section;
+      const lbl = document.createElement('div');
+      lbl.className = 'section-label';
+      lbl.textContent = acct.section;
+      panel.appendChild(lbl);
+    }
+
+    const node = document.createElement('div');
+    node.className = 'account-node';
+    node.id = 'node-' + acct.id;
+    node.style.setProperty('--node-color', acct.color);
+    node.onclick = () => selectAccount(acct.id);
+
+    node.innerHTML = `
+      <div class="node-accent"></div>
+      <div class="node-body">
+        <div class="node-name">${escHtml(acct.name)}</div>
+        <div class="node-sub">${escHtml(acct.alias)}</div>
+        <div class="node-sid">${escHtml(acct.sid)}</div>
+      </div>
+      <div class="node-arrow">›</div>
+    `;
+    panel.appendChild(node);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function selectAccount(id) {
+  if (activeId) {
+    const prev = document.getElementById('node-' + activeId);
+    if (prev) prev.classList.remove('active');
+  }
+  activeId = id;
+  const el = document.getElementById('node-' + id);
+  if (el) el.classList.add('active');
+
+  const acct = ACCOUNTS.find(a => a.id === id);
+  renderDetail(acct);
+}
+
+function renderDetail(acct) {
+  const panel = document.getElementById('detail');
+  const c = acct.color;
+
+  const privHtml = acct.privileges.map(p =>
+    `<span class="priv-chip ${p.level}">${escHtml(p.name)}</span>`
+  ).join('');
+
+  const infoHtml = acct.info.map(i =>
+    `<div class="info-card">
+      <div class="info-card-label">${escHtml(i.label)}</div>
+      <div class="info-card-val">${escHtml(i.val)}</div>
+    </div>`
+  ).join('');
+
+  const sidPartsHtml = acct.sid_parts.map(p =>
+    `<div class="sid-part">
+      <div class="sid-part-val" style="color:${c}">${escHtml(p.val)}</div>
+      <div class="sid-part-label">${escHtml(p.label)}</div>
+    </div>`
+  ).join('');
+
+  const huntHtml = acct.hunt.map(h =>
+    `<div class="hunt-item">
+      <span class="hunt-bullet">▸</span>
+      <span class="hunt-text">${escHtml(h)}</span>
+    </div>`
+  ).join('');
+
+  const attackHtml = acct.attacks.length ? `
+    <div>
+      <div class="section-heading">MITRE ATT&CK Techniques</div>
+      <table class="attack-table">
+        <thead><tr>
+          <th>Technique</th><th>TID</th><th>Description</th>
+        </tr></thead>
+        <tbody>
+          ${acct.attacks.map(a => `
+            <tr>
+              <td>${escHtml(a.name)}</td>
+              <td><span class="tid">${escHtml(a.tid)}</span></td>
+              <td>${escHtml(a.desc)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '';
+
+  panel.innerHTML = `
+    <div class="detail-content">
+      <div class="detail-header">
+        <div class="detail-icon" style="background:${c}18;border-color:${c}44;color:${c};font-size:24px">${acct.icon}</div>
+        <div class="detail-header-text">
+          <div class="detail-title">${escHtml(acct.name)}</div>
+          <div class="detail-category" style="color:${c}">${escHtml(acct.category)}</div>
+          <div class="detail-desc">${escHtml(acct.desc)}</div>
+        </div>
+      </div>
+
+      <div class="sid-block">
+        <div class="sid-block-label">Security Identifier (SID)</div>
+        <div class="sid-value" style="color:${c}">${escHtml(acct.sid)}</div>
+        <div class="sid-breakdown">${sidPartsHtml}</div>
+      </div>
+
+      <div>
+        <div class="section-heading">Key Attributes</div>
+        <div class="info-grid">${infoHtml}</div>
+      </div>
+
+      <div>
+        <div class="section-heading">Privileges & Rights</div>
+        <div class="priv-grid">${privHtml}</div>
+      </div>
+
+      <div>
+        <div class="section-heading">Hunt Signals</div>
+        <div class="hunt-list">${huntHtml || '<div style="color:var(--text-muted);font-size:13px;font-family:JetBrains Mono,monospace">No specific hunt signals defined.</div>'}</div>
+      </div>
+
+      <div>
+        <div class="section-heading">MDE KQL Reference</div>
+        <div class="kql-block">
+          <div class="kql-header">
+            <span class="kql-label">Microsoft Defender for Endpoint</span>
+            <button class="kql-copy" onclick="copyKql(this)">copy</button>
+          </div>
+          <div class="kql-body" id="kql-raw-${acct.id}">${acct.kql}</div>
+        </div>
+      </div>
+
+      ${attackHtml}
+    </div>
+  `;
+}
+
+function copyKql(btn) {
+  const block = btn.closest('.kql-block').querySelector('.kql-body');
+  const text = block.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied ✓';
+    setTimeout(() => btn.textContent = 'copy', 1800);
+  });
+}
+
+buildHierarchy();
+// auto-select first
+selectAccount('system');
+</script>
+</body>
+</html>
